@@ -1,10 +1,10 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from openai import OpenAI
+from groq import Groq
 import os
 
 app = Flask(__name__)
-CORS(app)
+client = Groq()
 
 # 🔐 API KEY (uisti sa, že máš nastavenú premennú prostredia alebo sem vlož kľúč)
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY", "TVOJ_API_KLUC"))
@@ -165,14 +165,6 @@ databaza = {
     ]
 }
 
-@app.route("/")
-def home():
-    return "Backend beží 🚀"
-
-@app.route("/students", methods=["GET"])
-def get_students():
-    return jsonify(databaza)
-
 @app.route("/chat", methods=["POST"])
 def chat():
     data = request.get_json()
@@ -184,7 +176,7 @@ def chat():
     if not character:
         return jsonify({"reply": "Chýba postava 💀"})
 
-    # 🎭 PARAMETRE POSTAVY (Preberajú sa priamo z frontendu)
+    # 🎭 PARAMETRE POSTAVY
     name = character.get("name", "")
     surname = character.get("surname", "")
     nickname = character.get("nickname", "")
@@ -194,40 +186,32 @@ def chat():
 
     mood_description = moods.get(mood, "normal")
 
-    # 🧠 SYSTEM PROMPT
+    # 🧠 SYSTEM PROMPT (charakter + nálada)
     system_prompt = f"""
-You are {name} {surname} (nickname: {nickname}).
-Personality: {personality}
-Style: {style}
-Current mood: {mood} ({mood_description})
+    Si postava menom {name} {surname} ({nickname}).
+    Tvoja osobnosť: {personality}.
+    Štýl rozprávania: {style}.
+    Aktuálna nálada: {mood_description}.
 
-You are chatting in a dating app called Markchat.
-
-RULES:
-- Speak in SLOVAK language.
-- Keep replies short (1-2 sentences).
-- If your style says "bad grammar", "slang" or "toxic", use it.
-- Never mention you are AI.
-- Stay 100% in character.
-"""
+    Odpovedaj ako táto postava, nikdy nevychádzaj z role.
+    """
 
     try:
         completion = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="qwen/qwen3-32b",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message}
-            ]
+            ],
+            temperature=0.6,
+            max_completion_tokens=512,
+            top_p=0.95,
+            stream=False
         )
 
         reply = completion.choices[0].message.content
+
         return jsonify({"reply": reply})
 
     except Exception as e:
-        print("ERROR:", e)
-        return jsonify({"reply": "AI sa zasekla 💀"})
-
-if __name__ == "__main__":
-    # Render priraďuje port automaticky, toto ho zachytí
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+        return jsonify({"reply": f"Chyba: {str(e)}"})
