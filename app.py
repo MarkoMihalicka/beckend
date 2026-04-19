@@ -4,12 +4,11 @@ from groq import Groq
 import os
 
 app = Flask(__name__)
-client = Groq()
+CORS(app)
 
-# 🔐 API KEY (uisti sa, že máš nastavenú premennú prostredia alebo sem vlož kľúč)
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY", "TVOJ_API_KLUC"))
+# 🔐 API KEY z ENV (nastav na Renderi alebo lokálne)
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-# 📦 AKTUALIZOVANÁ DATABÁZA (podľa tvojho nového JSONu)
 databaza = {
     "students": [
         {
@@ -164,7 +163,12 @@ databaza = {
         }
     ]
 }
+# 📥 endpoint pre frontend (tvoj HTML ho už volá)
+@app.route("/students", methods=["GET"])
+def get_students():
+    return jsonify(databaza)
 
+# 💬 CHAT ENDPOINT (LLaMA)
 @app.route("/chat", methods=["POST"])
 def chat():
     data = request.get_json()
@@ -176,7 +180,6 @@ def chat():
     if not character:
         return jsonify({"reply": "Chýba postava 💀"})
 
-    # 🎭 PARAMETRE POSTAVY
     name = character.get("name", "")
     surname = character.get("surname", "")
     nickname = character.get("nickname", "")
@@ -186,27 +189,31 @@ def chat():
 
     mood_description = moods.get(mood, "normal")
 
-    # 🧠 SYSTEM PROMPT (charakter + nálada)
+    # 🧠 PROMPT
     system_prompt = f"""
-    Si postava menom {name} {surname} ({nickname}).
-    Tvoja osobnosť: {personality}.
-    Štýl rozprávania: {style}.
-    Aktuálna nálada: {mood_description}.
+    Si {name} {surname} ({nickname}).
 
-    Odpovedaj ako táto postava, nikdy nevychádzaj z role.
+    Osobnosť: {personality}
+    Štýl: {style}
+    Nálada: {mood_description}
+
+    PRAVIDLÁ:
+    - odpovedaj krátko (1-2 vety)
+    - píš ako človek na zoznamke
+    - používaj emoji
+    - flirtuj keď sa hodí
+    - nikdy nevychádzaj z role
     """
 
     try:
         completion = client.chat.completions.create(
-            model="qwen/qwen3-32b",
+            model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message}
             ],
-            temperature=0.6,
-            max_completion_tokens=512,
-            top_p=0.95,
-            stream=False
+            temperature=0.9,
+            max_completion_tokens=200
         )
 
         reply = completion.choices[0].message.content
@@ -215,3 +222,7 @@ def chat():
 
     except Exception as e:
         return jsonify({"reply": f"Chyba: {str(e)}"})
+
+# 🚀 RUN
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
