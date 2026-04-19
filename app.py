@@ -1,10 +1,10 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from groq import Groq
 import os
+from groq import Groq
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 # 🔐 API KEY z ENV (nastav na Renderi alebo lokálne)
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
